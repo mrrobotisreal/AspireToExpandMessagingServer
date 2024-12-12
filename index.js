@@ -40,7 +40,6 @@ io.on('connection', (socket) => {
             lastName,
             profilePictureUrl,
         }) => {
-            // console.log('Registering user...');
             const { errorMessage, paramsExist } =
                 registerUser.checkRequiredParams({
                     userId,
@@ -56,7 +55,6 @@ io.on('connection', (socket) => {
                 );
                 return;
             }
-            // console.log('Searching for user:', userId, userType, preferredName);
             let user = await User.findOne({
                 userId: userId,
                 userType: userType,
