@@ -462,12 +462,6 @@ io.on('connection', (socket) => {
                     currentUser.socketId &&
                     currentUser.socketId !== socket.id
                 ) {
-                    // TODO: on client side, add logic to check if user is currently viewing the chat room and if not, updated icon to indicate unread messages
-                    // io.to(user.socketId).emit('chatsList', {
-                    //     chatId: room.roomId,
-                    //     participants: roomResponseUsers,
-                    //     latestMessage: roomResponseMessages[0],
-                    // });
                     io.to(currentUser.socketId).emit(
                         'messagesList',
                         roomResponse
@@ -544,7 +538,19 @@ io.on('connection', (socket) => {
 
     socket.on(
         'createChatRoom',
-        async ({ sender, participants, message, timestamp }) => {
+        async ({ newRoomId, sender, participants, message, timestamp }) => {
+            const existingRoom = await Room.findOne({ roomId: newRoomId });
+            if (existingRoom) {
+                console.log('Room already exists. Sending error message...');
+                socket.emit('createChatRoomError', {
+                    errorMessage: 'RoomId already exists',
+                    sender,
+                    participants,
+                    message,
+                    timestamp,
+                });
+                return;
+            }
             console.log('Creating chat room...');
             console.log(
                 'Searching for room with users:',
@@ -552,14 +558,18 @@ io.on('connection', (socket) => {
                 ...participants
             );
             const sendingUser = await User.findOne({ userId: sender.userId }); // TODO: handle error if no user
-            const roomUserIds = participants
-                .filter((participant) => participant.userId !== sender.userId)
-                .map(async (participant) => {
-                    const user = await User.findOne({
-                        userId: participant.userId,
-                    }); // TODO: handle error if no user
-                    return user._id;
+            const roomUsers = participants.filter(
+                (participant) => participant.userId !== sender.userId
+            );
+            const roomUserIds = [];
+            const roomParticipants = [];
+            for (let i = 0; i < roomUsers.length; i++) {
+                const userData = await User.findOne({
+                    userId: roomUsers[i].userId,
                 });
+                roomUserIds.push(userData._id);
+                roomParticipants.push(userData);
+            }
             let room = await Room.findOne({
                 users: {
                     $all: [sendingUser._id, ...roomUserIds],
@@ -568,10 +578,10 @@ io.on('connection', (socket) => {
             if (!room) {
                 console.log('Room not found. Creating new room...');
                 room = new Room({
-                    roomId: uuidv4(),
+                    roomId: newRoomId,
                     users: [sendingUser._id, ...roomUserIds],
+                    messages: [],
                 });
-                await room.save();
             }
 
             console.log('Creating new message...');
@@ -591,31 +601,106 @@ io.on('connection', (socket) => {
             room.messages.push(newMessage._id);
             await room.save();
 
-            socket.emit('chatRoomCreated');
+            const chatRoomResponse = {};
+            chatRoomResponse.chatId = room.roomId;
+            chatRoomResponse.participants = roomParticipants.map(
+                (participant) => ({
+                    userId: participant.userId,
+                    userType: participant.userType,
+                    preferredName: participant.preferredName,
+                    firstName: participant.firstName,
+                    lastName: participant.lastName,
+                    profilePictureUrl: participant.profilePictureUrl || '',
+                })
+            );
+            chatRoomResponse.messagesList = [
+                {
+                    messageId: newMessage.messageId,
+                    chatId: newMessage.roomId,
+                    sender: {
+                        userId: sender.userId,
+                        userType: sender.userType,
+                        preferredName: sender.preferredName,
+                        firstName: sender.firstName,
+                        lastName: sender.lastName,
+                        profilePictureUrl: sender.profilePictureUrl || '',
+                    },
+                    content: newMessage.content,
+                    timestamp: newMessage.timestamp,
+                    isReceived: newMessage.isReceived,
+                    isRead: newMessage.isRead,
+                    isDeleted: newMessage.isDeleted,
+                },
+            ];
+
+            socket.emit('chatRoomCreated', chatRoomResponse);
 
             console.log('Sending message to participants...');
-            participants.forEach(async (participant) => {
-                console.log('Searching for participant:', participant.userId);
-                const participantData = await User.findOne({
-                    userId: participant.userId,
-                });
-                if (participantData && participantData.socketId) {
+            roomParticipants.forEach(async (participant) => {
+                if (participant && participant.socketId) {
                     console.log('Participant found. Sending message...');
-                    io.to(participantData.socketId).emit('joinChatRoom', {
-                        roomId: room.roomId,
+                    io.to(participant.socketId).emit('newMessage', {
+                        chatId: room.roomId,
                         participants: [
                             sender,
-                            ...participants.filter(
-                                (user) => user.userId !== participant.userId
-                            ),
+                            ...roomParticipants
+                                .filter(
+                                    (roomParticipant) =>
+                                        roomParticipant.userId !==
+                                        participant.userId
+                                )
+                                .map((roomParticipant) => ({
+                                    userId: roomParticipant.userId,
+                                    userType: roomParticipant.userType,
+                                    preferredName:
+                                        roomParticipant.preferredName,
+                                    firstName: roomParticipant.firstName,
+                                    lastName: roomParticipant.lastName,
+                                    profilePictureUrl:
+                                        roomParticipant.profilePictureUrl || '',
+                                })),
                         ],
-                        message,
+                        message: {
+                            messageId: newMessage.messageId,
+                            chatId: newMessage.roomId,
+                            sender: {
+                                userId: sender.userId,
+                                userType: sender.userType,
+                                preferredName: sender.preferredName,
+                                firstName: sender.firstName,
+                                lastName: sender.lastName,
+                                profilePictureUrl:
+                                    sender.profilePictureUrl || '',
+                            },
+                            content: newMessage.content,
+                            timestamp: newMessage.timestamp,
+                            isReceived: newMessage.isReceived,
+                            isRead: newMessage.isRead,
+                            isDeleted: newMessage.isDeleted,
+                        },
                     });
-                } else {
-                    console.log(
-                        `User ${participant.userId} is not online. Message will be sent when they are online.`
-                    );
                 }
+                // console.log('Searching for participant:', participant.userId);
+                // const participantData = await User.findOne({
+                //     userId: participant.userId,
+                // });
+                // if (participantData && participantData.socketId) {
+                //     console.log('Participant found. Sending message...');
+                //     io.to(participantData.socketId).emit('joinChatRoom', {
+                //         chatId: room.roomId,
+                //         participants: [
+                //             sender,
+                //             ...participants.filter(
+                //                 (user) => user.userId !== participant.userId
+                //             ),
+                //         ],
+                //         message,
+                //     });
+                // } else {
+                //     console.log(
+                //         `User ${participant.userId} is not online. Message will be sent when they are online.`
+                //     );
+                // }
             });
         }
     );
