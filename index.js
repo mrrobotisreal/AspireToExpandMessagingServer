@@ -132,11 +132,10 @@ io.on('connection', (socket) => {
                     options: { sort: { timestamp: -1 } },
                 });
             // console.log('Chat rooms fetched:', JSON.stringify(rooms, null, 2));
-
-            const chatRooms = rooms.map((room) => {
-                // console.log('Mapping chat summaries...');
-                const chatId = room.roomId;
-                const participants = room.users
+            const chatRoomsResponse = [];
+            for (let i = 0; i < rooms.length; i++) {
+                const chatRoom = {};
+                const participants = rooms[i].users
                     .filter((user) => user.userId !== requestingUser.userId)
                     .map((user) => ({
                         userId: user.userId,
@@ -146,35 +145,38 @@ io.on('connection', (socket) => {
                         lastName: user.lastName,
                         profilePictureUrl: user.profilePictureUrl || '',
                     }));
-                // console.log(
-                //     'Participants in room:',
-                //     JSON.stringify(participants, null, 2)
-                // );
-                const latestMessage = room.messages[0];
-                // console.log(
-                //     'Latest message in room:',
-                //     JSON.stringify(latestMessage, null, 2)
-                // );
+                chatRoom.chatId = rooms[i].roomId;
+                chatRoom.participants = participants;
+                const latestMessage = rooms[i].messages[0];
+                if (latestMessage) {
+                    const latestMessageSender = await User.findOne({
+                        _id: latestMessage.sender,
+                    });
+                    chatRoom.latestMessage = {
+                        messageId: latestMessage.messageId,
+                        chatId: latestMessage.roomId,
+                        sender: {
+                            userId: latestMessageSender.userId,
+                            userType: latestMessageSender.userType,
+                            preferredName: latestMessageSender.preferredName,
+                            firstName: latestMessageSender.firstName,
+                            lastName: latestMessageSender.lastName,
+                            profilePictureUrl:
+                                latestMessageSender.profilePictureUrl || '',
+                        },
+                        content: latestMessage.content,
+                        timestamp: latestMessage.timestamp,
+                        isReceived: latestMessage.isReceived,
+                        isRead: latestMessage.isRead,
+                        isDeleted: latestMessage.isDeleted,
+                    };
+                } else {
+                    chatRoom.latestMessage = null;
+                }
+                chatRoomsResponse.push(chatRoom);
+            }
 
-                return {
-                    chatId,
-                    participants,
-                    latestMessage: latestMessage
-                        ? {
-                              messageId: latestMessage.messageId,
-                              chatId,
-                              sender: latestMessage.sender,
-                              content: latestMessage.content,
-                              timestamp: latestMessage.timestamp,
-                              isReceived: latestMessage.isReceived,
-                              isRead: latestMessage.isRead,
-                              isDeleted: latestMessage.isDeleted,
-                          }
-                        : null,
-                };
-            });
-
-            socket.emit('chatsList', chatRooms);
+            socket.emit('chatsList', chatRoomsResponse);
         } catch (error) {
             console.log('Error listing chats:', error);
             socket.emit('listChatsError', `Error during listChats: ${error}`);
@@ -454,17 +456,83 @@ io.on('connection', (socket) => {
             roomResponse.chatId = room.roomId;
             roomResponse.participants = roomResponseUsers;
             roomResponse.messagesList = roomResponseMessages;
-            room.users.forEach((user) => {
-                if (user.socketId && user.socketId !== socket.id) {
+            for (let i = 0; i < room.users.length; i++) {
+                const currentUser = room.users[i];
+                if (
+                    currentUser.socketId &&
+                    currentUser.socketId !== socket.id
+                ) {
                     // TODO: on client side, add logic to check if user is currently viewing the chat room and if not, updated icon to indicate unread messages
                     // io.to(user.socketId).emit('chatsList', {
                     //     chatId: room.roomId,
                     //     participants: roomResponseUsers,
                     //     latestMessage: roomResponseMessages[0],
                     // });
-                    io.to(user.socketId).emit('messagesList', roomResponse);
+                    io.to(currentUser.socketId).emit(
+                        'messagesList',
+                        roomResponse
+                    );
                 }
-            });
+                const userRooms = await Room.find({
+                    users: currentUser._id,
+                })
+                    .populate({
+                        path: 'users',
+                        select: 'userId userType preferredName firstName lastName profilePictureUrl',
+                    })
+                    .populate({
+                        path: 'messages',
+                        options: { sort: { timestamp: -1 } },
+                    });
+                const userChatsListResponse = [];
+                for (let j = 0; j < userRooms.length; j++) {
+                    const chatRoom = {};
+                    const participants = userRooms[j].users
+                        .filter((user) => user.userId !== currentUser.userId)
+                        .map((user) => ({
+                            userId: user.userId,
+                            userType: user.userType,
+                            preferredName: user.preferredName,
+                            firstName: user.firstName,
+                            lastName: user.lastName,
+                            profilePictureUrl: user.profilePictureUrl || '',
+                        }));
+                    chatRoom.chatId = userRooms[j].roomId;
+                    chatRoom.participants = participants;
+                    const latestMessage = userRooms[j].messages[0];
+                    if (latestMessage) {
+                        const latestMessageSender = await User.findOne({
+                            _id: latestMessage.sender,
+                        });
+                        chatRoom.latestMessage = {
+                            messageId: latestMessage.messageId,
+                            chatId: latestMessage.roomId,
+                            sender: {
+                                userId: latestMessageSender.userId,
+                                userType: latestMessageSender.userType,
+                                preferredName:
+                                    latestMessageSender.preferredName,
+                                firstName: latestMessageSender.firstName,
+                                lastName: latestMessageSender.lastName,
+                                profilePictureUrl:
+                                    latestMessageSender.profilePictureUrl || '',
+                            },
+                            content: latestMessage.content,
+                            timestamp: latestMessage.timestamp,
+                            isReceived: latestMessage.isReceived,
+                            isRead: latestMessage.isRead,
+                            isDeleted: latestMessage.isDeleted,
+                        };
+                    } else {
+                        chatRoom.latestMessage = null;
+                    }
+                    userChatsListResponse.push(chatRoom);
+                }
+                io.to(currentUser.socketId).emit(
+                    'chatsList',
+                    userChatsListResponse
+                );
+            }
         } catch (error) {
             console.log('Error reading messages:', error);
             socket.emit(
