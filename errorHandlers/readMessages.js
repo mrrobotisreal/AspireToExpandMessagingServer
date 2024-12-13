@@ -12,7 +12,7 @@ function checkRequiredParams({ roomId, unreadMessages }) {
         };
     }
 
-    if (!unreadMessages || unreadMessages.length === 0) {
+    if (!unreadMessages) {
         console.log('Missing unreadMessages');
         return {
             errorMessage: 'Missing unreadMessages',

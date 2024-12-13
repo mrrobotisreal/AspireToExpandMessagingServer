@@ -453,13 +453,15 @@ io.on('connection', (socket) => {
             }
             roomResponse.chatId = room.roomId;
             roomResponse.participants = roomResponseUsers;
-            roomResponse.messages = roomResponseMessages;
-            console.log(
-                'Room response:',
-                JSON.stringify(roomResponse, null, 2)
-            );
+            roomResponse.messagesList = roomResponseMessages;
             room.users.forEach((user) => {
                 if (user.socketId && user.socketId !== socket.id) {
+                    // TODO: on client side, add logic to check if user is currently viewing the chat room and if not, updated icon to indicate unread messages
+                    // io.to(user.socketId).emit('chatsList', {
+                    //     chatId: room.roomId,
+                    //     participants: roomResponseUsers,
+                    //     latestMessage: roomResponseMessages[0],
+                    // });
                     io.to(user.socketId).emit('messagesList', roomResponse);
                 }
             });
