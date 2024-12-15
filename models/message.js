@@ -9,6 +9,8 @@ const messageSchema = new mongoose.Schema({
         required: true,
     },
     content: { type: String, required: true },
+    imageUrl: { type: String },
+    thumbnailUrl: { type: String },
     timestamp: { type: Number, required: true },
     isReceived: { type: Boolean, required: true },
     isRead: { type: Boolean, required: true },

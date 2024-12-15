@@ -247,6 +247,8 @@ io.on('connection', (socket) => {
                         profilePictureUrl: sender.profilePictureUrl || '',
                     },
                     content: room.messages[i].content,
+                    imageUrl: room.messages[i].imageUrl || null,
+                    thumbnailUrl: room.messages[i].thumbnailUrl || null,
                     timestamp: room.messages[i].timestamp,
                     isReceived: room.messages[i].isReceived,
                     isRead: room.messages[i].isRead,
@@ -270,99 +272,120 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('sendMessage', async ({ roomId, sender, message, timestamp }) => {
-        // console.log('Sending message...');
-        try {
-            const senderData = await User.findOne({ userId: sender.userId });
-            const room = await Room.findOne({ roomId }).populate('users');
-            if (!room) {
-                // console.log(
-                //     'Room not found. Sending error message to client...'
-                // );
+    socket.on(
+        'sendMessage',
+        async ({
+            roomId,
+            sender,
+            message,
+            imageUrl,
+            thumbnailUrl,
+            timestamp,
+        }) => {
+            // console.log('Sending message...');
+            try {
+                const senderData = await User.findOne({
+                    userId: sender.userId,
+                });
+                const room = await Room.findOne({ roomId }).populate('users');
+                if (!room) {
+                    // console.log(
+                    //     'Room not found. Sending error message to client...'
+                    // );
+                    socket.emit(
+                        'sendMessageError',
+                        `Error during sendMessage: Room not found`
+                    );
+                    return;
+                }
+
+                const newMessage = new Message({
+                    messageId: uuidv4(),
+                    roomId,
+                    sender: senderData._id,
+                    content: message,
+                    timestamp,
+                    isReceived: false,
+                    isRead: false,
+                    isDeleted: false,
+                });
+                if (imageUrl) {
+                    newMessage.imageUrl = imageUrl;
+                }
+                if (thumbnailUrl) {
+                    newMessage.thumbnailUrl = thumbnailUrl;
+                }
+                await newMessage.save();
+
+                room.messages.push(newMessage._id);
+                await room.save();
+
+                const updatedRoom = await Room.findOne({ roomId })
+                    .populate({
+                        path: 'users',
+                        select: 'userId userType preferredName firstName lastName profilePictureUrl',
+                    })
+                    .populate({
+                        path: 'messages',
+                        options: { sort: { timestamp: -1 } },
+                    });
+                const roomResponse = {};
+                const roomResponseUsers = [];
+                const roomResponseMessages = [];
+
+                for (let i = 0; i < updatedRoom.users.length; i++) {
+                    const roomUser = updatedRoom.users[i];
+                    roomResponseUsers.push({
+                        userId: roomUser.userId,
+                        userType: roomUser.userType,
+                        preferredName: roomUser.preferredName,
+                        firstName: roomUser.firstName,
+                        lastName: roomUser.lastName,
+                        profilePictureUrl: roomUser.profilePictureUrl || '',
+                    });
+                }
+                for (let i = updatedRoom.messages.length - 1; i >= 0; i--) {
+                    const roomMessage = updatedRoom.messages[i];
+                    const msgSender = await User.findOne({
+                        _id: roomMessage.sender,
+                    });
+                    roomResponseMessages.push({
+                        messageId: roomMessage.messageId,
+                        chatId: roomMessage.roomId,
+                        sender: {
+                            userId: msgSender.userId,
+                            userType: msgSender.userType,
+                            preferredName: msgSender.preferredName,
+                            firstName: msgSender.firstName,
+                            lastName: msgSender.lastName,
+                            profilePictureUrl:
+                                msgSender.profilePictureUrl || '',
+                        },
+                        content: roomMessage.content,
+                        imageUrl: roomMessage.imageUrl || null,
+                        thumbnailUrl: roomMessage.thumbnailUrl || null,
+                        timestamp: roomMessage.timestamp,
+                        isReceived: roomMessage.isReceived,
+                        isRead: roomMessage.isRead,
+                        isDeleted: roomMessage.isDeleted,
+                    });
+                }
+                roomResponse.chatId = updatedRoom.roomId;
+                roomResponse.participants = roomResponseUsers;
+                roomResponse.messages = roomResponseMessages;
+
+                room.users.forEach((user) => {
+                    io.to(user.socketId).emit('newMessage', roomResponse);
+                });
+            } catch (error) {
+                console.log('Error sending message:', error);
                 socket.emit(
                     'sendMessageError',
-                    `Error during sendMessage: Room not found`
+                    `Error during sendMessage: ${error}`
                 );
-                return;
             }
-
-            const newMessage = new Message({
-                messageId: uuidv4(),
-                roomId,
-                sender: senderData._id,
-                content: message,
-                timestamp,
-                isReceived: false,
-                isRead: false,
-                isDeleted: false,
-            });
-            await newMessage.save();
-
-            room.messages.push(newMessage._id);
-            await room.save();
-
-            const updatedRoom = await Room.findOne({ roomId })
-                .populate({
-                    path: 'users',
-                    select: 'userId userType preferredName firstName lastName profilePictureUrl',
-                })
-                .populate({
-                    path: 'messages',
-                    options: { sort: { timestamp: -1 } },
-                });
-            const roomResponse = {};
-            const roomResponseUsers = [];
-            const roomResponseMessages = [];
-
-            for (let i = 0; i < updatedRoom.users.length; i++) {
-                const roomUser = updatedRoom.users[i];
-                roomResponseUsers.push({
-                    userId: roomUser.userId,
-                    userType: roomUser.userType,
-                    preferredName: roomUser.preferredName,
-                    firstName: roomUser.firstName,
-                    lastName: roomUser.lastName,
-                    profilePictureUrl: roomUser.profilePictureUrl || '',
-                });
-            }
-            for (let i = updatedRoom.messages.length - 1; i >= 0; i--) {
-                const roomMessage = updatedRoom.messages[i];
-                const msgSender = await User.findOne({
-                    _id: roomMessage.sender,
-                });
-                roomResponseMessages.push({
-                    messageId: roomMessage.messageId,
-                    chatId: roomMessage.roomId,
-                    sender: {
-                        userId: msgSender.userId,
-                        userType: msgSender.userType,
-                        preferredName: msgSender.preferredName,
-                        firstName: msgSender.firstName,
-                        lastName: msgSender.lastName,
-                        profilePictureUrl: msgSender.profilePictureUrl || '',
-                    },
-                    content: roomMessage.content,
-                    timestamp: roomMessage.timestamp,
-                    isReceived: roomMessage.isReceived,
-                    isRead: roomMessage.isRead,
-                    isDeleted: roomMessage.isDeleted,
-                });
-            }
-            roomResponse.chatId = updatedRoom.roomId;
-            roomResponse.participants = roomResponseUsers;
-            roomResponse.messages = roomResponseMessages;
-
-            room.users.forEach((user) => {
-                io.to(user.socketId).emit('newMessage', roomResponse);
-            });
-        } catch (error) {
-            console.log('Error sending message:', error);
-            socket.emit(
-                'sendMessageError',
-                `Error during sendMessage: ${error}`
-            );
         }
-    });
+    );
 
     socket.on('readMessages', async ({ roomId, unreadMessages }) => {
         try {
@@ -447,6 +470,8 @@ io.on('connection', (socket) => {
                         profilePictureUrl: msgSender.profilePictureUrl || '',
                     },
                     content: roomMessage.content,
+                    imageUrl: roomMessage.imageUrl || null,
+                    thumbnailUrl: roomMessage.thumbnailUrl || null,
                     timestamp: roomMessage.timestamp,
                     isReceived: roomMessage.isReceived,
                     isRead: roomMessage.isRead,
@@ -512,6 +537,8 @@ io.on('connection', (socket) => {
                                     latestMessageSender.profilePictureUrl || '',
                             },
                             content: latestMessage.content,
+                            imageUrl: latestMessage.imageUrl || null,
+                            thumbnailUrl: latestMessage.thumbnailUrl || null,
                             timestamp: latestMessage.timestamp,
                             isReceived: latestMessage.isReceived,
                             isRead: latestMessage.isRead,
@@ -538,7 +565,15 @@ io.on('connection', (socket) => {
 
     socket.on(
         'createChatRoom',
-        async ({ newRoomId, sender, participants, message, timestamp }) => {
+        async ({
+            newRoomId,
+            sender,
+            participants,
+            message,
+            imageUrl,
+            thumbnailUrl,
+            timestamp,
+        }) => {
             const existingRoom = await Room.findOne({ roomId: newRoomId });
             if (existingRoom) {
                 console.log('Room already exists. Sending error message...');
@@ -595,6 +630,12 @@ io.on('connection', (socket) => {
                 isRead: false,
                 isDeleted: false,
             });
+            if (imageUrl) {
+                newMessage.imageUrl = imageUrl;
+            }
+            if (thumbnailUrl) {
+                newMessage.thumbnailUrl = thumbnailUrl;
+            }
             await newMessage.save();
             console.log('Message created and saved:', newMessage);
 
@@ -626,6 +667,8 @@ io.on('connection', (socket) => {
                         profilePictureUrl: sender.profilePictureUrl || '',
                     },
                     content: newMessage.content,
+                    imageUrl: newMessage.imageUrl || null,
+                    thumbnailUrl: newMessage.thumbnailUrl || null,
                     timestamp: newMessage.timestamp,
                     isReceived: newMessage.isReceived,
                     isRead: newMessage.isRead,
@@ -673,6 +716,8 @@ io.on('connection', (socket) => {
                                     sender.profilePictureUrl || '',
                             },
                             content: newMessage.content,
+                            imageUrl: newMessage.imageUrl || null,
+                            thumbnailUrl: newMessage.thumbnailUrl || null,
                             timestamp: newMessage.timestamp,
                             isReceived: newMessage.isReceived,
                             isRead: newMessage.isRead,
