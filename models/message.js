@@ -11,6 +11,7 @@ const messageSchema = new mongoose.Schema({
     content: { type: String, required: true },
     imageUrl: { type: String },
     thumbnailUrl: { type: String },
+    audioUrl: { type: String },
     timestamp: { type: Number, required: true },
     isReceived: { type: Boolean, required: true },
     isRead: { type: Boolean, required: true },

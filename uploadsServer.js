@@ -25,15 +25,10 @@ app.use(bodyParser.json());
 
 app.post('/chats/upload/image', upload.single('image'), async (req, res) => {
     try {
-        // const params = new URLSearchParams(req.url.split("?")[1]);
-        // const userId = params.get("userId");
-        // const userType = params.get("userType");
-        // const roomId = params.get("roomId");
-        // const messageId = uuidv4();
         const timestamp = Date.now();
         const originalImage = req.file.buffer;
         const thumbnail = await sharp(originalImage)
-            .resize({ width: 200 })
+            .resize({ width: 300 })
             .toBuffer();
         const originalImageKey = `originals/${timestamp}-${req.file.originalname}`;
         await s3
@@ -60,6 +55,34 @@ app.post('/chats/upload/image', upload.single('image'), async (req, res) => {
         });
     } catch (error) {
         console.error(`Error uploading image: ${error}`);
+        res.status(500).send('Internal Server Error');
+    }
+});
+
+app.post('/chats/upload/audio', upload.single('audio'), async (req, res) => {
+    try {
+        const audioKey = `audio/${Date.now()}-${req.file.originalname}`;
+        console.log('audioKey', audioKey);
+
+        const s3Result = await s3
+            .upload({
+                Bucket: process.env.AWS_BUCKET_NAME,
+                Key: audioKey,
+                Body: req.file.buffer,
+                ContentType: req.file.mimetype,
+            })
+            .promise();
+        console.log('s3 result', s3Result);
+        console.log(
+            'audio url',
+            `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${audioKey}`
+        );
+
+        res.status(200).json({
+            audio_url: `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${audioKey}`,
+        });
+    } catch (error) {
+        console.error(`Error uploading audio: ${error}`);
         res.status(500).send('Internal Server Error');
     }
 });

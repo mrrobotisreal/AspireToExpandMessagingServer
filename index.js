@@ -249,6 +249,7 @@ io.on('connection', (socket) => {
                     content: room.messages[i].content,
                     imageUrl: room.messages[i].imageUrl || null,
                     thumbnailUrl: room.messages[i].thumbnailUrl || null,
+                    audioUrl: room.messages[i].audioUrl || null,
                     timestamp: room.messages[i].timestamp,
                     isReceived: room.messages[i].isReceived,
                     isRead: room.messages[i].isRead,
@@ -280,6 +281,7 @@ io.on('connection', (socket) => {
             message,
             imageUrl,
             thumbnailUrl,
+            audioUrl,
             timestamp,
         }) => {
             // console.log('Sending message...');
@@ -314,6 +316,9 @@ io.on('connection', (socket) => {
                 }
                 if (thumbnailUrl) {
                     newMessage.thumbnailUrl = thumbnailUrl;
+                }
+                if (audioUrl) {
+                    newMessage.audioUrl = audioUrl;
                 }
                 await newMessage.save();
 
@@ -364,6 +369,7 @@ io.on('connection', (socket) => {
                         content: roomMessage.content,
                         imageUrl: roomMessage.imageUrl || null,
                         thumbnailUrl: roomMessage.thumbnailUrl || null,
+                        audioUrl: roomMessage.audioUrl || null,
                         timestamp: roomMessage.timestamp,
                         isReceived: roomMessage.isReceived,
                         isRead: roomMessage.isRead,
@@ -472,6 +478,7 @@ io.on('connection', (socket) => {
                     content: roomMessage.content,
                     imageUrl: roomMessage.imageUrl || null,
                     thumbnailUrl: roomMessage.thumbnailUrl || null,
+                    audioUrl: roomMessage.audioUrl || null,
                     timestamp: roomMessage.timestamp,
                     isReceived: roomMessage.isReceived,
                     isRead: roomMessage.isRead,
@@ -539,6 +546,7 @@ io.on('connection', (socket) => {
                             content: latestMessage.content,
                             imageUrl: latestMessage.imageUrl || null,
                             thumbnailUrl: latestMessage.thumbnailUrl || null,
+                            audioUrl: latestMessage.audioUrl || null,
                             timestamp: latestMessage.timestamp,
                             isReceived: latestMessage.isReceived,
                             isRead: latestMessage.isRead,
@@ -572,6 +580,7 @@ io.on('connection', (socket) => {
             message,
             imageUrl,
             thumbnailUrl,
+            audioUrl,
             timestamp,
         }) => {
             const existingRoom = await Room.findOne({ roomId: newRoomId });
@@ -582,6 +591,9 @@ io.on('connection', (socket) => {
                     sender,
                     participants,
                     message,
+                    imageUrl,
+                    thumbnailUrl,
+                    audioUrl,
                     timestamp,
                 });
                 return;
@@ -636,6 +648,9 @@ io.on('connection', (socket) => {
             if (thumbnailUrl) {
                 newMessage.thumbnailUrl = thumbnailUrl;
             }
+            if (audioUrl) {
+                newMessage.audioUrl = audioUrl;
+            }
             await newMessage.save();
             console.log('Message created and saved:', newMessage);
 
@@ -669,6 +684,7 @@ io.on('connection', (socket) => {
                     content: newMessage.content,
                     imageUrl: newMessage.imageUrl || null,
                     thumbnailUrl: newMessage.thumbnailUrl || null,
+                    audioUrl: newMessage.audioUrl || null,
                     timestamp: newMessage.timestamp,
                     isReceived: newMessage.isReceived,
                     isRead: newMessage.isRead,
@@ -718,6 +734,7 @@ io.on('connection', (socket) => {
                             content: newMessage.content,
                             imageUrl: newMessage.imageUrl || null,
                             thumbnailUrl: newMessage.thumbnailUrl || null,
+                            audioUrl: newMessage.audioUrl || null,
                             timestamp: newMessage.timestamp,
                             isReceived: newMessage.isReceived,
                             isRead: newMessage.isRead,
