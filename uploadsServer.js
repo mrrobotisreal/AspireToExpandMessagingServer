@@ -7,10 +7,14 @@ require('dotenv').config();
 const AWS = require('aws-sdk');
 const app = express();
 const PORT = 11115;
-// const options = {
-//   cert: fs.readFileSync("/etc/letsencrypt/live/aspirewithalina.com/fullchain.pem"),
-//   key: fs.readFileSync("/etc/letsencrypt/live/aspirewithalina.com/privkey.pem"),
-// };
+const options = {
+    cert: fs.readFileSync(
+        '/etc/letsencrypt/live/aspirewithalina.com/fullchain.pem'
+    ),
+    key: fs.readFileSync(
+        '/etc/letsencrypt/live/aspirewithalina.com/privkey.pem'
+    ),
+};
 
 const s3 = new AWS.S3({
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
@@ -87,9 +91,11 @@ app.post('/chats/upload/audio', upload.single('audio'), async (req, res) => {
     }
 });
 
-// https.createServer(options, app).listen(PORT, () => {
-//   console.log(`Server is running securely on https://aspirewithalina.com:${PORT}`);
-// });
-app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
+https.createServer(options, app).listen(PORT, () => {
+    console.log(
+        `Server is running securely on https://aspirewithalina.com:${PORT}`
+    );
 });
+// app.listen(PORT, () => {
+//     console.log(`Server is running on http://localhost:${PORT}`);
+// });
