@@ -3,6 +3,7 @@ const bodyParser = require('body-parser');
 const multer = require('multer');
 const sharp = require('sharp');
 const { v4: uuidv4 } = require('uuid');
+const fs = require('fs');
 require('dotenv').config();
 const AWS = require('aws-sdk');
 const app = express();
