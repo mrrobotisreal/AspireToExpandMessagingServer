@@ -1,4 +1,5 @@
 const express = require('express');
+const cors = require('cors');
 const https = require('https');
 const fs = require('fs');
 const bodyParser = require('body-parser');
@@ -16,6 +17,11 @@ const options = {
         '/etc/letsencrypt/live/aspirewithalina.com/privkey.pem'
     ),
 };
+const corsOptions = {
+    origin: 'https://aspirewithalina.com',
+    methods: ['POST'],
+    allowedHeaders: ['Content-Type'],
+};
 
 const sesClient = new SESClient({
     region: process.env.AWS_REGION,
@@ -25,6 +31,7 @@ const sesClient = new SESClient({
     },
 });
 
+app.use(cors(corsOptions));
 app.use(bodyParser.json());
 
 async function sendEmail(toAddress, subject, body) {
