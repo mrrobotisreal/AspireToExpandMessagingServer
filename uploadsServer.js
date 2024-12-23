@@ -4,6 +4,7 @@ const multer = require('multer');
 const sharp = require('sharp');
 const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
+const https = require('https');
 require('dotenv').config();
 const AWS = require('aws-sdk');
 const app = express();
