@@ -1,4 +1,6 @@
 const express = require('express');
+const https = require('https');
+const fs = require('fs');
 const bodyParser = require('body-parser');
 const { v4: uuidv4 } = require('uuid');
 require('dotenv').config();
@@ -6,10 +8,14 @@ const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 const { Verification } = require('./models/verification');
 const app = express();
 const PORT = 22221;
-// const options = {
-//   cert: fs.readFileSync("/etc/letsencrypt/live/aspirewithalina.com/fullchain.pem"),
-//   key: fs.readFileSync("/etc/letsencrypt/live/aspirewithalina.com/privkey.pem"),
-// };
+const options = {
+    cert: fs.readFileSync(
+        '/etc/letsencrypt/live/aspirewithalina.com/fullchain.pem'
+    ),
+    key: fs.readFileSync(
+        '/etc/letsencrypt/live/aspirewithalina.com/privkey.pem'
+    ),
+};
 
 const sesClient = new SESClient({
     region: process.env.AWS_REGION,
@@ -127,6 +133,12 @@ app.post('/verify-email', async (req, res) => {
     }
 });
 
-app.listen(PORT, () => {
-    console.log(`Email server is running on port ${PORT}`);
+https.createServer(options, app).listen(PORT, () => {
+    console.log(
+        `Email Server is running securely on https://aspirewithalina.com:${PORT}`
+    );
 });
+
+// app.listen(PORT, () => {
+//     console.log(`Email server is running on port ${PORT}`);
+// });
