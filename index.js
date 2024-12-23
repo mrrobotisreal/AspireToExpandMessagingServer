@@ -12,20 +12,20 @@ const listChats = require('./errorHandlers/listChats');
 const listMessages = require('./errorHandlers/listMessages');
 const readMessages = require('./errorHandlers/readMessages');
 
-// const certFile = fs.readFileSync(
-//     '/etc/letsencrypt/live/aspirewithalina.com/fullchain.pem'
-// );
-// const keyFile = fs.readFileSync(
-//     '/etc/letsencrypt/live/aspirewithalina.com/privkey.pem'
-// );
+const certFile = fs.readFileSync(
+    '/etc/letsencrypt/live/aspirewithalina.com/fullchain.pem'
+);
+const keyFile = fs.readFileSync(
+    '/etc/letsencrypt/live/aspirewithalina.com/privkey.pem'
+);
 
-// const server = https.createServer({
-//     cert: certFile,
-//     key: keyFile,
-// });
-const server = http.createServer(); // for testing locally only
+const server = https.createServer({
+    cert: certFile,
+    key: keyFile,
+});
+// const server = http.createServer(); // for testing locally only
 const io = new Server(server);
-mongoose.connect('mongodb://localhost:27017/chat'); // will be aspireDB when ready
+mongoose.connect('mongodb://localhost:27017/aspireDB'); // will be aspireDB when ready
 
 io.on('connection', (socket) => {
     console.log(`User ${socket.id} connected`);
@@ -183,9 +183,20 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('listMessages', async ({ roomId, userId }) => {
+    socket.on('listMessages', async ({ roomId, userId, page, limit }) => {
         // console.log('Listing messages...');
         try {
+            page = page || 1;
+            limit = limit || 20;
+            const skip = (page - 1) * limit;
+            const pgMessages = await Message.find({ roomId })
+                .sort({ timestamp: -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean();
+            pgMessages.reverse();
+            console.log('pgMessages:', JSON.stringify(pgMessages, null, 2));
+
             const { errorMessage, paramsExist } =
                 listMessages.checkRequiredParams({ roomId });
             if (!paramsExist) {
@@ -767,30 +778,64 @@ io.on('connection', (socket) => {
         }
     );
 
-    socket.on('fetchMissedMessages', async (userId) => {
-        console.log('Fetching missed messages...');
-        console.log('Searching for user:', userId);
-        const user = await User.findOne({ userId });
-        if (user) {
-            console.log('User found. Fetching missed messages...');
-            const rooms = await Room.find({ users: userId }).populate(
-                'messages'
-            );
-            rooms.forEach((room) => {
-                const missedMessages = room.messages.filter(
-                    (msg) => msg.sender !== userId
-                );
-                if (missedMessages.length > 0) {
-                    socket.emit('missedMessages', {
-                        roomId: room.roomId,
-                        messages: missedMessages,
-                    });
-                }
+    socket.on('callUser', async ({ from, to, offer }) => {
+        console.log('Call user:', from, to, offer);
+        try {
+            const recipient = await User.findOne({ userId: to });
+            if (!recipient || !recipient.socketId) {
+                // TODO: later add functionality to call user even when they are offline via running in the background
+                socket.emit('callFailed', 'User is not online');
+                return;
+            }
+
+            io.to(recipient.socketId).emit('incomingCall', {
+                from,
+                offer,
             });
+        } catch (error) {
+            console.log('Error calling user:', error);
+            socket.emit('callFailed', `Error calling user: ${error}`);
         }
     });
 
-    socket.on('joinChatRoom', async ({ roomId, participants }) => {});
+    socket.on('answerCall', async ({ from, to, answer }) => {
+        console.log('Answer call:', from, to, answer);
+        try {
+            const caller = await User.findOne({ userId: from });
+            if (!caller || !caller.socketId) {
+                socket.emit('answerFailed', 'Caller is not online');
+                return;
+            }
+
+            io.to(caller.socketId).emit('callAnswered', { to, answer });
+        } catch (error) {
+            console.log('Error answering call:', error);
+            socket.emit('answerFailed', `Error answering call: ${error}`);
+        }
+    });
+
+    socket.on('sendIceCandidate', async ({ to, candidate }) => {
+        console.log('Send ICE:', to, candidate);
+        try {
+            const recipient = await User.findOne({ userId: to });
+            if (!recipient || !recipient.socketId) {
+                console.warn(
+                    `User ${to} is offline; cannot send ICE candidate`
+                );
+                return;
+            }
+
+            io.to(recipient.socketId).emit('receiveIceCandidate', {
+                candidate,
+            });
+        } catch (error) {
+            console.log('Error sending ICE candidate:', error);
+            socket.emit(
+                'iceCandidateFailed',
+                `Error sending ICE candidate: ${error}`
+            );
+        }
+    });
 
     socket.on('disonnect', () => {
         const userID = Object.keys(userSockets).find(
