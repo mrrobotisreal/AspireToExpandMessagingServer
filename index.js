@@ -26,6 +26,7 @@ const server = https.createServer({
 // const server = http.createServer(); // for testing locally only
 const io = new Server(server);
 mongoose.connect('mongodb://localhost:27017/aspireDB'); // will be aspireDB when ready
+// mongoose.connect('mongodb://localhost:27017/chat'); // will be aspireDB when ready
 
 io.on('connection', (socket) => {
     console.log(`User ${socket.id} connected`);
