@@ -133,6 +133,25 @@ app.post('/verify-email', async (req, res) => {
         verification.registrationCode = registrationCode;
         verification.isRegistered = false;
         await verification.save();
+        sendEmail(
+            verification.email,
+            'Registration Code',
+            `<h1>Welcome to Aspire With Alina!</h1>
+            <h2>Your registration code is:</h2>
+            <hr/>
+            <strong>${registrationCode}</strong>
+            <br/>
+            <br/>
+            <p>Use the registration code above to register with the app, and it'll take to you to the student info form.</p>
+            <p>Once you're there, please fill out the information and then use your email address and the password you created to log in and use the app.</p>
+            <br/>
+            <br/>
+            <p>Thank you for joining Aspire With Alina!</p>
+            <br/>
+            <p>Sincerely,</p>
+            <br/>
+            <p>Alina and the Aspire With Alina team</p>`
+        );
         res.status(200).json({ registrationCode });
     } catch (error) {
         console.error(`Error verifying email: ${error}`);
