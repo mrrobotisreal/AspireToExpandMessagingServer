@@ -66,9 +66,10 @@ async function sendEmail(toAddress, subject, body) {
 async function saveVerificationToken(email, token) {
     try {
         const verification = new Verification({
-            email,
-            token,
+            email: email,
+            token: token,
             isVerified: false,
+            registrationCode: '',
             isRegistered: false,
         });
         await verification.save();
@@ -127,7 +128,7 @@ app.post('/verify-email', async (req, res) => {
     try {
         const { token } = req.body;
         console.log('Verifying email with token:', token);
-        const verification = await Verification.findOne({ token });
+        const verification = await Verification.findOne({ token: token });
         verification.isVerified = true;
         const registrationCode = uuidv4();
         verification.registrationCode = registrationCode;
